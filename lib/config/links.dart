@@ -1,3 +1,2 @@
-// Placeholders until the real pages are ready.
-const String privacyPolicyUrl = 'https://example.com';
-const String supportUrl = 'https://example.com';
+const String privacyPolicyUrl = 'https://stonewatch.store/privacy-policy.html';
+const String supportUrl = 'https://stonewatch.store/support.html';
