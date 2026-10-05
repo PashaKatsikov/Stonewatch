@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Flame silhouette — reads as fire at 24dp, distinct from the
+         launcher icon. White on transparent so the status-bar tint
+         renders it correctly on light and dark trays. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M13,1.6C9.9,5.2 11.2,7.9 11.2,9.9C11.2,11.2 10.3,11.9 9.3,11.6C9.6,13 8.6,14 7.6,13.6C8.1,17 10.4,22 14.1,22C17.8,22 20.6,19 20.6,15.2C20.6,11.6 18.3,9.8 17.4,6.6C16.9,8.2 16,8.8 15.2,8.4C16.5,6 16,3.8 13,1.6ZM13.9,19.4C12.1,19.4 10.6,18 10.6,16.2C10.6,14.2 12.3,13.6 12.1,11.6C13.3,12.8 13.9,13.4 14.9,13.6C15.9,12.9 16,12 15.8,11.1C16.7,12 17.3,13.2 17.3,14.8C17.3,17.1 15.8,19.4 13.9,19.4Z"/>
+</vector>

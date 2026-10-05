@@ -1,3 +1,4 @@
-// Placeholders until the real pages are ready.
-const String privacyPolicyUrl = 'https://example.com';
-const String supportUrl = 'https://example.com';
+import '../gateway/config/policy_links.dart';
+
+const String privacyPolicyUrl = privacyLink;
+const String supportUrl = supportLink;

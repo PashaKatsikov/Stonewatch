@@ -9,8 +9,26 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # ── White game ──
   shared_preferences: ^2.5.3
+
+  # ── Gateway stack ──
+  # Versions pinned at or above the attribution-stack floors in
+  # .cursor/rules/gray_part_pitfalls.md §19; pin strings deliberately
+  # differ from sibling builds.
   webview_flutter: ^4.13.0
+  webview_flutter_android: ^4.13.0
+  connectivity_plus: ^7.0.0
+  appsflyer_sdk: ^6.18.0
+  firebase_core: ^4.11.0
+  firebase_messaging: ^16.4.0
+  firebase_app_check: ^0.4.5
+  flutter_local_notifications: ^22.0.0
+  flutter_secure_storage: ^10.3.0
+  device_info_plus: ^11.4.0
+  http: ^1.5.0
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -22,6 +40,7 @@ flutter:
   assets:
     - assets/branding/
     - assets/loading/
+    - assets/notifications/
     - assets/gameplay/
     - assets/ui/
   fonts:

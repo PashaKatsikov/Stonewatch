@@ -1,0 +1,38 @@
+{
+  "_comment": [
+    "TEMPLATE STUB — DO NOT SHIP. Rename to google-services.json with the",
+    "real Firebase config before enabling push / App Check.",
+    "  1. Firebase Console -> Add project (unique per app).",
+    "  2. Register an Android app with package com.stonewatch.watchgame",
+    "     (must match applicationId in android/app/build.gradle.kts).",
+    "  3. Download google-services.json, save it NEXT TO this file.",
+    "  4. Keep it gitignored — never commit real credentials.",
+    "  5. Seal the Firebase project number into sealed_values.dart via",
+    "     dart run tool/seal_values.dart projectId:<number>.",
+    "Until the real file is present the Google Services Gradle plugin is",
+    "skipped and Firebase stays dormant — the app runs the native game."
+  ],
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "REPLACE_ME",
+    "storage_bucket": "REPLACE_ME.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.stonewatch.watchgame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        { "current_key": "REPLACE_ME" }
+      ],
+      "services": {
+        "appinvite_service": { "other_platform_oauth_client": [] }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

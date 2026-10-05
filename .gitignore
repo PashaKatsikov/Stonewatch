@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Gateway secrets — never commit real credentials
+/android/app/google-services.json
+/android/key.properties
+/build/debug_info/

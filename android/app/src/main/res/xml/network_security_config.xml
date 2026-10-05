@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cleartext MUST stay permitted: partners routinely send HTTP push
+    URLs and OAuth redirects via HTTP intermediaries. Starting from a
+    "false" base and whitelisting hosts silently breaks cold-start push
+    taps whenever a partner changes a sub-domain.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

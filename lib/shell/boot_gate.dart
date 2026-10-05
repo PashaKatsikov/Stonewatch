@@ -4,19 +4,49 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../format.dart';
 import '../game/art.dart';
+import '../gateway/model/route_outcome.dart';
+import '../gateway/push/signal_post.dart';
+import '../gateway/store/vault_box.dart';
+import '../gateway/traffic_warden.dart';
+import '../gateway/view/no_signal_view.dart';
+import '../gateway/view/notify_invite.dart';
+import '../gateway/view/web_host.dart';
 import '../play/play_page.dart';
 
+// ============================================================
+// BOOT GATE — the loading surface that drives the decision
+// ============================================================
+// Visually unchanged: the Stonewatch loading artwork, the animated
+// "loading" caption and the bottom progress bar. Behind it, the
+// TrafficWarden resolves the route. The progress bar reads the
+// warden's progress (0 → 0.9) during the network wait, then fills to
+// 1.0 as the next surface takes over — monotonic, never jumping back.
+//
+//   NativeOutcome   → precache game art, lock portrait, show PlayPage
+//   WebOutcome      → NotifyInvite (first time) or WebHost
+//   NoSignalOutcome → NoSignalView (retry re-runs this gate)
+// ============================================================
+
 class BootGate extends StatefulWidget {
-  const BootGate({super.key});
+  const BootGate({
+    super.key,
+    required this.warden,
+    required this.vault,
+    required this.signals,
+  });
+
+  final TrafficWarden warden;
+  final VaultBox vault;
+  final SignalPost signals;
 
   @override
   State<BootGate> createState() => _BootGateState();
 }
 
 class _BootGateState extends State<BootGate> {
-  SharedPreferences? _prefs;
-  var _ready = false;
   var _progress = 0.0;
+  var _game = false;
+  SharedPreferences? _prefs;
 
   @override
   void initState() {
@@ -35,44 +65,92 @@ class _BootGateState extends State<BootGate> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _drive());
   }
 
-  Future<void> _boot() async {
+  Future<void> _drive() async {
+    final clock = Stopwatch()..start();
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    final clock = Stopwatch()..start();
-    const holdMs = 1800;
+
+    final outcome = await widget.warden.resolve(
+      onProgress: (v) {
+        if (mounted) setState(() => _progress = (v * 0.9).clamp(0.0, 0.9));
+      },
+    );
+    if (!mounted) return;
+
+    switch (outcome) {
+      case NativeOutcome():
+        await _warmGameArt();
+        await _ensureMinHold(clock, 1500);
+        if (!mounted) return;
+        setState(() => _progress = 1);
+        await SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.portraitUp,
+        ]);
+        _restoreGameChrome();
+        if (!mounted) return;
+        setState(() {
+          _prefs = prefs;
+          _game = true;
+        });
+      case WebOutcome(url: final url):
+        await _ensureMinHold(clock, 900);
+        if (!mounted) return;
+        setState(() => _progress = 1);
+        final Widget next = widget.vault.shouldInviteNotify
+            ? NotifyInvite(
+                vault: widget.vault,
+                signals: widget.signals,
+                destination: url,
+              )
+            : WebHost(
+                url: url,
+                vault: widget.vault,
+                signals: widget.signals,
+              );
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => next),
+        );
+      case NoSignalOutcome():
+        await _ensureMinHold(clock, 900);
+        if (!mounted) return;
+        setState(() => _progress = 1);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => NoSignalView(
+              rebuild: (_) => BootGate(
+                warden: widget.warden,
+                vault: widget.vault,
+                signals: widget.signals,
+              ),
+            ),
+          ),
+        );
+    }
+  }
+
+  Future<void> _warmGameArt() async {
     final assets = spriteAssets;
     for (var i = 0; i < assets.length; i++) {
       if (!mounted) return;
-      await precacheImage(AssetImage(assets[i]), context);
+      try {
+        await precacheImage(AssetImage(assets[i]), context);
+      } catch (_) {}
       if (!mounted) return;
-      final loaded = (i + 1) / assets.length;
-      final time = (clock.elapsedMilliseconds / holdMs).clamp(0.0, 1.0);
-      setState(() {
-        _progress = (loaded * 0.8 + time * 0.2).clamp(0.0, 0.96).toDouble();
-      });
+      setState(() => _progress = 0.9 + 0.1 * (i + 1) / assets.length);
     }
-    final left = holdMs - clock.elapsedMilliseconds;
+  }
+
+  Future<void> _ensureMinHold(Stopwatch clock, int minMs) async {
+    final left = minMs - clock.elapsedMilliseconds;
     if (left > 0) {
-      final from = _progress;
-      final steps = (left / 32).ceil().clamp(1, 80).toInt();
-      final slice = Duration(milliseconds: left ~/ steps);
-      for (var step = 1; step <= steps; step++) {
-        if (!mounted) return;
-        await Future<void>.delayed(slice);
-        if (!mounted) return;
-        setState(() => _progress = from + (1 - from) * step / steps);
-      }
-    } else if (mounted) {
-      setState(() => _progress = 1);
+      await Future<void>.delayed(Duration(milliseconds: left));
     }
-    if (!mounted) return;
-    await SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.portraitUp,
-    ]);
-    if (!mounted) return;
+  }
+
+  void _restoreGameChrome() {
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Color(0x00000000),
@@ -82,16 +160,13 @@ class _BootGateState extends State<BootGate> {
         systemNavigationBarContrastEnforced: false,
       ),
     );
-    setState(() {
-      _prefs = prefs;
-      _ready = true;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     final prefs = _prefs;
-    if (_ready && prefs != null) return PlayPage(prefs: prefs);
+    if (_game && prefs != null) return PlayPage(prefs: prefs);
+
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final padding = MediaQuery.paddingOf(context);
@@ -136,7 +211,7 @@ class _BootGateState extends State<BootGate> {
                     child: LinearProgressIndicator(
                       value: _progress,
                       minHeight: 10,
-                      backgroundColor: Color(0x66000000),
+                      backgroundColor: const Color(0x66000000),
                       color: Colors.white,
                     ),
                   ),
