@@ -37,8 +37,8 @@ class _PlayPageState extends State<PlayPage> {
   void initState() {
     super.initState();
     session = Session(
-      balance: widget.prefs.getDouble('balance') ?? 100000,
-      bet: widget.prefs.getDouble('bet') ?? 100,
+      balance: widget.prefs.getDouble('balance') ?? startingBalance,
+      bet: widget.prefs.getDouble('bet') ?? startingBet,
       onBank: (balance, bet) {
         widget.prefs.setDouble('balance', balance);
         widget.prefs.setDouble('bet', bet);

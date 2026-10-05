@@ -1,12 +1,14 @@
-import 'dart:math' as math;
-
 import 'package:flutter/foundation.dart';
 
 import '../config/cheat.dart';
+import '../core/stonewatch_core.dart';
 import 'art.dart';
+import 'dice.dart';
 import 'rules.dart';
 
-const int minBet = 10;
+final int minBet = swMinBet().round();
+final double startingBalance = swStartingBalance();
+final double startingBet = swStartingBet();
 
 enum RoundPhase { betting, falling, live, busting, celebrating }
 
@@ -29,15 +31,15 @@ class Session extends ChangeNotifier {
     required double balance,
     required double bet,
     required this.onBank,
-    math.Random? random,
-  }) : _rng = random ?? math.Random(),
-       balance = balance < 0 ? 0 : balance {
-    this.bet = _fitBet(bet);
-    hanging = _rng.nextInt(blockAssets.length);
+    int? seed,
+  }) : _dice = Dice(seed),
+       balance = swOpeningBalance(balance) {
+    this.bet = swFitBet(bet, this.balance);
+    hanging = _dice.below(blockAssets.length);
   }
 
   final void Function(double balance, double bet) onBank;
-  final math.Random _rng;
+  final Dice _dice;
 
   double balance;
   late double bet;
@@ -52,7 +54,7 @@ class Session extends ChangeNotifier {
   bool showPlaced = false;
   int beat = 0;
 
-  bool get broke => balance < minBet;
+  bool get broke => swIsBroke(balance);
   bool get betting => phase == RoundPhase.betting;
   bool get canCashOut => phase == RoundPhase.live && payout > 0;
 
@@ -60,50 +62,42 @@ class Session extends ChangeNotifier {
 
   double get topWidth => floors.isEmpty ? foundationWidth : floors.last.width;
 
-  double get swingSpeed {
-    final heat = stake <= 0 ? 0.0 : (payout / stake - 1).clamp(0, 6);
-    return 2.15 + floors.length * 0.28 + heat * 0.12;
-  }
+  double get swingSpeed => swSwingSpeed(stake, payout, floors.length);
 
-  double get swingReach => math.min(0.36, 0.26 + floors.length * 0.018);
+  double get swingReach => swSwingReach(floors.length);
 
   void nudgeBet(int direction) {
     if (!betting || broke) return;
-    const step = 10.0;
-    final units = bet / step;
-    final next = direction > 0
-        ? units.floor() * step + step
-        : units.ceil() * step - step;
-    bet = _fitBet(next);
+    bet = swNudgeBet(bet, direction, balance);
     onBank(balance, bet);
     notifyListeners();
   }
 
   void doubleBet() {
     if (!betting || broke) return;
-    bet = _fitBet(bet * 2);
+    bet = swDoubleBet(bet, balance);
     onBank(balance, bet);
     notifyListeners();
   }
 
   void allIn() {
     if (!betting || broke) return;
-    bet = _money(balance);
+    bet = swMoney(balance);
     onBank(balance, bet);
     notifyListeners();
   }
 
   void refill() {
-    balance = 100000;
-    bet = 100;
+    balance = startingBalance;
+    bet = startingBet;
     onBank(balance, bet);
     notifyListeners();
   }
 
   void grant(double amount) {
     if (!cheatsEnabled || !betting) return;
-    balance = _money(balance + amount);
-    bet = _fitBet(bet);
+    balance = swCredit(balance, amount);
+    bet = swFitBet(bet, balance);
     onBank(balance, bet);
     notifyListeners();
   }
@@ -123,11 +117,11 @@ class Session extends ChangeNotifier {
       return false;
     }
     if (phase == RoundPhase.betting) {
-      if (broke || bet < minBet || bet > balance + 0.001) return false;
-      stake = _money(bet);
-      balance = _money(balance - stake);
+      if (!swCanPlace(bet, balance)) return false;
+      stake = swMoney(bet);
+      balance = swDebit(balance, stake);
       payout = stake;
-      roundId = 100000000 + _rng.nextInt(900000000);
+      roundId = _dice.roundId();
       showPlaced = true;
       onBank(balance, bet);
     }
@@ -144,7 +138,7 @@ class Session extends ChangeNotifier {
         blockWidth: width,
         topX: topX,
         topWidth: topWidth,
-        roll: _rng.nextDouble(),
+        roll: _dice.unit(),
       ),
     );
     if (!landing.held) {
@@ -163,7 +157,7 @@ class Session extends ChangeNotifier {
       ),
     );
     results.add(landing.multiplier);
-    hanging = _otherThan(art);
+    hanging = _dice.otherThan(art, blockAssets.length);
     phase = RoundPhase.live;
     beat++;
     notifyListeners();
@@ -173,9 +167,12 @@ class Session extends ChangeNotifier {
   void cashOut() {
     if (!canCashOut) return;
     winAmount = payout;
-    balance = _money(balance + payout);
-    if (bet > balance) bet = _fitBet(bet);
-    hanging = _otherThan(floors.isEmpty ? hanging : floors.last.art);
+    balance = swCredit(balance, payout);
+    if (bet > balance) bet = swFitBet(bet, balance);
+    hanging = _dice.otherThan(
+      floors.isEmpty ? hanging : floors.last.art,
+      blockAssets.length,
+    );
     phase = RoundPhase.celebrating;
     onBank(balance, bet);
     beat++;
@@ -194,27 +191,16 @@ class Session extends ChangeNotifier {
     stake = 0;
     payout = 0;
     showPlaced = false;
-    if (newPiece) hanging = _rng.nextInt(blockAssets.length);
-    bet = _fitBet(bet);
+    if (newPiece) hanging = _dice.below(blockAssets.length);
+    bet = swFitBet(bet, balance);
     phase = RoundPhase.betting;
     beat++;
     notifyListeners();
   }
 
-  int _otherThan(int art) {
-    if (blockAssets.length < 2) return art;
-    var next = _rng.nextInt(blockAssets.length - 1);
-    if (next >= art) next++;
-    return next;
+  @override
+  void dispose() {
+    _dice.close();
+    super.dispose();
   }
-
-  double _fitBet(double value) {
-    if (balance < minBet) return _money(balance);
-    var next = value;
-    if (next < minBet) next = minBet.toDouble();
-    if (next > balance) next = balance;
-    return _money(next);
-  }
-
-  double _money(double value) => (value * 100).roundToDouble() / 100;
 }

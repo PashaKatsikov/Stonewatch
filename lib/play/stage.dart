@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../config/cheat.dart';
 import '../format.dart';
 import '../game/art.dart';
+import '../game/motion.dart';
 import '../game/session.dart';
 
 class DropRelay {
@@ -76,7 +77,7 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
       return;
     }
     final art = session.hanging;
-    final swung = math.sin(_phase) * session.swingReach;
+    final swung = Motion.swingOffset(_phase, session.swingReach);
     final x = Cheat.redirectedX(swung, session.topX) ?? swung;
     if (!session.armDrop()) return;
     _dropArt = art;
@@ -86,19 +87,13 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
   }
 
   void _tick(Duration elapsed) {
-    var dt = (elapsed - _last).inMicroseconds / 1000000;
+    final dt = Motion.frameDt((elapsed - _last).inMicroseconds / 1000000);
     _last = elapsed;
-    if (dt <= 0 || dt > 0.05) dt = 1 / 60;
     _clock += dt;
-    _phase += dt * widget.session.swingSpeed;
-    if (_shake > 0.15) {
-      _shake *= math.exp(-7 * dt);
-      _shakeX = math.sin(_clock * 52) * _shake;
-    } else {
-      _shake = 0;
-      _shakeX = 0;
-    }
-    if (_camT < 1) _camT = math.min(1, _camT + dt / 0.32);
+    _phase = Motion.swingAdvance(_phase, dt, widget.session.swingSpeed);
+    _shake = Motion.shakeDecay(_shake, dt);
+    _shakeX = Motion.shakeOffset(_clock, _shake);
+    _camT = Motion.cameraStep(_camT, dt);
     if (_dustT >= 0 && _dustT < 1) _dustT += dt / 0.65;
     if (_popupT >= 0 && _popupT < 1) _popupT += dt / 1.05;
 
@@ -106,19 +101,19 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
       case _Motion.idle:
         break;
       case _Motion.falling:
-        _t += dt / 0.38;
+        _t = Motion.fallStep(_t, dt);
         if (_t >= 1) {
           _t = 1;
           _finishFall();
         }
       case _Motion.tumbling:
-        _t += dt / 0.46;
+        _t = Motion.tumbleStep(_t, dt);
         if (_t >= 1) {
           _motion = _Motion.collapsing;
           _t = 0;
         }
       case _Motion.collapsing:
-        _t += dt / 0.7;
+        _t = Motion.collapseStep(_t, dt);
         if (_t >= 1) {
           _t = 1;
           _motion = _Motion.idle;
@@ -141,7 +136,7 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
       _dustT = 0;
       _popupT = 0;
       _popupValue = landing.multiplier;
-      _shake = landing.multiplier >= 2 ? 9 : 5;
+      _shake = Motion.impactShake(held: true, multiplier: landing.multiplier);
       HapticFeedback.mediumImpact();
       return;
     }
@@ -149,8 +144,8 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
     _t = 0;
     _popupT = 0;
     _popupValue = 0;
-    _missDir = (_frozenX - topX) >= 0 ? 1 : -1;
-    _shake = 14;
+    _missDir = Motion.missDirection(_frozenX, topX);
+    _shake = Motion.impactShake(held: false, multiplier: 0);
     HapticFeedback.heavyImpact();
   }
 
@@ -174,7 +169,7 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
     final resting = size.height - foundationH;
     final worldDy =
         math.max(resting, anchor - surface) +
-        collapseP * collapseP * size.height * 0.55;
+        Motion.collapseSink(collapseP) * size.height;
     final landingTop = worldDy + surface - blockH;
     final showHook =
         _motion == _Motion.idle && session.phase != RoundPhase.busting;
@@ -302,16 +297,14 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
   Widget _projectile(Size size, double blockH, double endTop) {
     final width = size.width * blockWidthFactor(_dropArt);
     final startTop = size.height * 0.08;
-    final fall = _motion == _Motion.falling ? _t.clamp(0.0, 1.0) : 1.0;
-    final eased = fall * fall;
+    final eased = Motion.fallEase(_motion == _Motion.falling ? _t : 1.0);
     var top = startTop + (endTop - startTop) * eased;
     var dx = 0.0;
     var spin = 0.0;
     if (_motion == _Motion.tumbling) {
-      final u = _t.clamp(0.0, 1.0);
-      dx = _missDir * u * u * size.width * 0.62;
-      top = endTop + u * u * size.height * 0.48;
-      spin = _missDir * u * 1.5;
+      dx = Motion.tumbleSlide(_missDir, _t) * size.width;
+      top = endTop + Motion.tumbleDrop(_t) * size.height;
+      spin = Motion.tumbleSpin(_missDir, _t);
     }
     final left = size.width / 2 + _frozenX * size.width - width / 2 + dx;
     return Positioned(
@@ -336,7 +329,7 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
     final blockW = size.width * blockWidthFactor(art);
     final craneH = math.min(blockH * 0.92, size.height * 0.24);
     final craneW = craneH * craneWidthOverHeight;
-    final norm = math.sin(_phase) * widget.session.swingReach;
+    final norm = Motion.swingOffset(_phase, widget.session.swingReach);
     final center = size.width / 2 + norm * size.width;
     final hangTop = size.height * 0.10;
     final groupTop = hangTop - craneH + 18;
@@ -363,7 +356,7 @@ class _StageState extends State<Stage> with SingleTickerProviderStateMixin {
         top: groupTop,
         width: groupW,
         child: Transform.rotate(
-          angle: math.cos(_phase) * 0.045,
+          angle: Motion.hookTilt(_phase),
           alignment: Alignment.topCenter,
           child: Column(
             mainAxisSize: MainAxisSize.min,

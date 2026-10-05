@@ -1,3 +1,4 @@
+import '../game/motion.dart';
 import '../game/rules.dart';
 
 /// Store builds set this to false. The panel and every assist go with it.
@@ -23,11 +24,7 @@ class Cheat {
   static double? redirectedX(double swung, double topX) {
     if (!cheatsEnabled || aim == CheatAim.normal) return null;
     if (aim == CheatAim.lucky) return topX;
-    final side = swung >= topX ? 1.0 : -1.0;
-    final shoved = topX + side * 0.72;
-    if (shoved > 0.9) return 0.9;
-    if (shoved < -0.9) return -0.9;
-    return shoved;
+    return Motion.shoveX(swung, topX);
   }
 
   static Landing apply(Landing judged) {
@@ -36,6 +33,6 @@ class Cheat {
       aim = CheatAim.normal;
       return Landing.miss(judged.center);
     }
-    return Landing.held(judged.center, 25);
+    return Landing.held(judged.center, topMultiplier);
   }
 }
