@@ -48,6 +48,7 @@ class ControlDock extends StatelessWidget {
               SizedBox(
                 height: 64,
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
                       child: CashoutButton(
