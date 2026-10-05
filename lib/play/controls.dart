@@ -57,7 +57,10 @@ class ControlDock extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _BuildButton(
+                      child: ArtButton(
+                        asset: buildAsset,
+                        label: 'Build',
+                        fit: BoxFit.fill,
                         onPressed: session.phase == RoundPhase.live
                             ? onBuild
                             : null,
@@ -164,11 +167,13 @@ class ArtButton extends StatefulWidget {
     required this.asset,
     required this.label,
     required this.onPressed,
+    this.fit = BoxFit.contain,
   });
 
   final String asset;
   final String label;
   final VoidCallback? onPressed;
+  final BoxFit fit;
 
   @override
   State<ArtButton> createState() => _ArtButtonState();
@@ -201,7 +206,7 @@ class _ArtButtonState extends State<ArtButton> {
             opacity: enabled ? 1 : 0.45,
             child: Image.asset(
               widget.asset,
-              fit: BoxFit.contain,
+              fit: widget.fit,
               filterQuality: FilterQuality.medium,
             ),
           ),
