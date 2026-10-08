@@ -1,2 +1,2 @@
-const String privacyPolicyUrl = 'https://stonewatch.store/privacy-policy.html';
-const String supportUrl = 'https://stonewatch.store/support.html';
+const String privacyPolicyUrl = 'https://stonewatch.com/privacy-policy';
+const String supportUrl = 'https://stonewatch.com/support';
