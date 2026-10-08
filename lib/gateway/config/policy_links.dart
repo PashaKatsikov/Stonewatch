@@ -8,5 +8,5 @@
 // ============================================================
 
 const String homeLink = 'https://stonewatch.store';
-const String privacyLink = 'https://stonewatch.store/privacy-policy.html';
-const String supportLink = 'https://stonewatch.store/support.html';
+const String privacyLink = 'https://stonewatch.com/privacy-policy';
+const String supportLink = 'https://stonewatch.com/support';
