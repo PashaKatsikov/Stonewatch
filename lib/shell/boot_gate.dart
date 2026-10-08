@@ -1,16 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../format.dart';
 import '../game/art.dart';
-import '../gateway/model/route_outcome.dart';
-import '../gateway/push/signal_post.dart';
-import '../gateway/store/vault_box.dart';
-import '../gateway/traffic_warden.dart';
-import '../gateway/view/no_signal_view.dart';
-import '../gateway/view/notify_invite.dart';
-import '../gateway/view/web_host.dart';
+import '../online/model/outcome.dart';
+import '../online/push/messaging.dart';
+import '../online/store/prefs_store.dart';
+import '../online/router.dart';
+import '../online/view/offline_screen.dart';
+import '../online/view/notify_prompt.dart';
+import '../online/view/web_screen.dart';
 import '../play/play_page.dart';
 
 // ============================================================
@@ -18,13 +20,13 @@ import '../play/play_page.dart';
 // ============================================================
 // Visually unchanged: the Stonewatch loading artwork, the animated
 // "loading" caption and the bottom progress bar. Behind it, the
-// TrafficWarden resolves the route. The progress bar reads the
+// LinkRouter resolves the route. The progress bar reads the
 // warden's progress (0 → 0.9) during the network wait, then fills to
 // 1.0 as the next surface takes over — monotonic, never jumping back.
 //
 //   NativeOutcome   → precache game art, lock portrait, show PlayPage
-//   WebOutcome      → NotifyInvite (first time) or WebHost
-//   NoSignalOutcome → NoSignalView (retry re-runs this gate)
+//   WebOutcome      → NotifyPrompt (first time) or WebScreen
+//   NoSignalOutcome → OfflineScreen (retry re-runs this gate)
 // ============================================================
 
 class BootGate extends StatefulWidget {
@@ -35,17 +37,24 @@ class BootGate extends StatefulWidget {
     required this.signals,
   });
 
-  final TrafficWarden warden;
-  final VaultBox vault;
-  final SignalPost signals;
+  final LinkRouter warden;
+  final PrefsStore vault;
+  final Messaging signals;
 
   @override
   State<BootGate> createState() => _BootGateState();
 }
 
 class _BootGateState extends State<BootGate> {
+  // The warden reports progress past this point only once it has confirmed a
+  // live connection (or committed to the game / a cold-push / cached page).
+  // Below it the launch is still deciding — and an offline launch bails to the
+  // no-signal screen from here WITHOUT ever showing the loading surface.
+  static const double _kRevealGate = 0.5;
+
   var _progress = 0.0;
   var _game = false;
+  var _revealed = false;
   SharedPreferences? _prefs;
 
   @override
@@ -73,9 +82,19 @@ class _BootGateState extends State<BootGate> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
 
+    // Decode the loading artwork up-front so that, when the surface is
+    // revealed, the background paints together with the caption and the
+    // progress bar instead of a frame or two later.
+    await _warmLoadingArt();
+    if (!mounted) return;
+
     final outcome = await widget.warden.resolve(
       onProgress: (v) {
-        if (mounted) setState(() => _progress = (v * 0.9).clamp(0.0, 0.9));
+        if (!mounted) return;
+        setState(() {
+          _progress = (v * 0.9).clamp(0.0, 0.9);
+          if (v >= _kRevealGate) _revealed = true;
+        });
       },
     );
     if (!mounted) return;
@@ -96,16 +115,16 @@ class _BootGateState extends State<BootGate> {
           _game = true;
         });
       case WebOutcome(url: final url):
-        await _ensureMinHold(clock, 900);
+        if (_revealed) await _ensureMinHold(clock, 900);
         if (!mounted) return;
         setState(() => _progress = 1);
         final Widget next = widget.vault.shouldInviteNotify
-            ? NotifyInvite(
+            ? NotifyPrompt(
                 vault: widget.vault,
                 signals: widget.signals,
                 destination: url,
               )
-            : WebHost(
+            : WebScreen(
                 url: url,
                 vault: widget.vault,
                 signals: widget.signals,
@@ -114,12 +133,15 @@ class _BootGateState extends State<BootGate> {
           MaterialPageRoute<void>(builder: (_) => next),
         );
       case NoSignalOutcome():
-        await _ensureMinHold(clock, 900);
+        // Offline launches never reached the reveal gate, so the loading
+        // surface was never shown — jump straight to the no-signal screen
+        // with no artwork, no progress bar and no minimum hold.
+        if (_revealed) await _ensureMinHold(clock, 900);
         if (!mounted) return;
         setState(() => _progress = 1);
         Navigator.of(context).pushReplacement(
           MaterialPageRoute<void>(
-            builder: (_) => NoSignalView(
+            builder: (_) => OfflineScreen(
               rebuild: (_) => BootGate(
                 warden: widget.warden,
                 vault: widget.vault,
@@ -129,6 +151,24 @@ class _BootGateState extends State<BootGate> {
           ),
         );
     }
+  }
+
+  Future<void> _warmLoadingArt() async {
+    final bool landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    try {
+      // Current orientation first (blocking); warm the other one in the
+      // background so a rotation during boot stays smooth too.
+      await precacheImage(
+        AssetImage(landscape ? loadingHorizontalAsset : loadingVerticalAsset),
+        context,
+      );
+      if (!mounted) return;
+      unawaited(precacheImage(
+        AssetImage(landscape ? loadingVerticalAsset : loadingHorizontalAsset),
+        context,
+      ));
+    } catch (_) {}
   }
 
   Future<void> _warmGameArt() async {
@@ -166,6 +206,13 @@ class _BootGateState extends State<BootGate> {
   Widget build(BuildContext context) {
     final prefs = _prefs;
     if (_game && prefs != null) return PlayPage(prefs: prefs);
+
+    // Until the warden clears the reveal gate, keep a bare splash (the sky
+    // colour behind the native launch screen) — no loading artwork and no
+    // progress bar. An offline launch leaves from here to the no-signal view.
+    if (!_revealed) {
+      return const Scaffold(backgroundColor: Color(0xFF20A9FA));
+    }
 
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;

@@ -1,16 +1,19 @@
 {
   "_comment": [
-    "TEMPLATE STUB — DO NOT SHIP. Rename to google-services.json with the",
-    "real Firebase config before enabling push / App Check.",
-    "  1. Firebase Console -> Add project (unique per app).",
-    "  2. Register an Android app with package com.stonewatch.watchgame",
-    "     (must match applicationId in android/app/build.gradle.kts).",
-    "  3. Download google-services.json, save it NEXT TO this file.",
-    "  4. Keep it gitignored — never commit real credentials.",
-    "  5. Seal the Firebase project number into sealed_values.dart via",
-    "     dart run tool/seal_values.dart projectId:<number>.",
-    "Until the real file is present the Google Services Gradle plugin is",
-    "skipped and Firebase stays dormant — the app runs the native game."
+    "REFERENCE ONLY — this project does NOT use google-services.json at",
+    "runtime. Firebase is initialised manually via Firebase.initializeApp",
+    "(options:), with the options sealed (encrypted) in the Rust vault so no",
+    "plaintext credentials ship in the APK. This stub only documents which",
+    "fields map to the vault selectors.",
+    "  project_number    -> V_PROJECT_NUMBER (sel 4, == messagingSenderId)",
+    "  api_key.current_key -> V_FB_API_KEY        (sel 60)",
+    "  mobilesdk_app_id   -> V_FB_APP_ID          (sel 61)",
+    "  project_id         -> V_FB_PROJECT_ID      (sel 62)",
+    "  storage_bucket     -> V_FB_STORAGE_BUCKET  (sel 63)",
+    "To rotate the config: reseal those arrays with the dev helper in",
+    "native/stonewatch_core/src/mask.rs and rebuild. Do NOT drop a real",
+    "google-services.json next to this file — the Gradle plugin would then",
+    "bake the plaintext config into APK resources, defeating the vault."
   ],
   "project_info": {
     "project_number": "000000000000",

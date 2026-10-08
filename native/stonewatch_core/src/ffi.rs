@@ -10,7 +10,7 @@
 use core::ffi::c_void;
 
 use crate::dice::Dice;
-use crate::{economy, motion, rules};
+use crate::{economy, motion, rules, vault};
 
 fn bf(value: bool) -> f64 {
     if value { 1.0 } else { 0.0 }
@@ -113,6 +113,40 @@ pub extern "C" fn o2o(handle: *mut c_void, art: u32, count: u32) -> u32 {
     with_dice(handle, art, |d| d.other_than(art, count))
 }
 
+// ── Gray-part secret vault ───────────────────────────────────────────────
+// `o7s` decodes the masked value for a selector and returns a freshly
+// allocated buffer laid out as `[len: u32 LE][utf8 bytes]`. The Dart side
+// reads the 4-byte header, copies the payload into a Dart string, then hands
+// the pointer back to `o7f`. Keeping the length in the header means Dart
+// never has to allocate native memory to receive it.
+
+#[unsafe(no_mangle)]
+pub extern "C" fn o7s(sel: u32) -> *mut u8 {
+    let plain = vault::bytes(sel);
+    let len = plain.len() as u32;
+    let mut buf = Vec::with_capacity(4 + plain.len());
+    buf.extend_from_slice(&len.to_le_bytes());
+    buf.extend_from_slice(&plain);
+    Box::into_raw(buf.into_boxed_slice()) as *mut u8
+}
+
+/// # Safety
+/// `ptr` must be null or a pointer returned by `o7s` that has not been freed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn o7f(ptr: *mut u8) {
+    if ptr.is_null() {
+        return;
+    }
+    let len = u32::from_le_bytes([
+        unsafe { *ptr },
+        unsafe { *ptr.add(1) },
+        unsafe { *ptr.add(2) },
+        unsafe { *ptr.add(3) },
+    ]) as usize;
+    let slice = core::ptr::slice_from_raw_parts_mut(ptr, 4 + len);
+    drop(unsafe { Box::from_raw(slice) });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +175,26 @@ mod tests {
         assert_eq!(o2u(null), 0.0);
         assert_eq!(o2o(null, 3, 5), 3);
         unsafe { o1x(null) };
+    }
+
+    #[test]
+    fn vault_round_trips_through_ffi() {
+        let ptr = o7s(10); // V_UA_PRODUCT
+        assert!(!ptr.is_null());
+        let len = u32::from_le_bytes([
+            unsafe { *ptr },
+            unsafe { *ptr.add(1) },
+            unsafe { *ptr.add(2) },
+            unsafe { *ptr.add(3) },
+        ]) as usize;
+        let data = unsafe { core::slice::from_raw_parts(ptr.add(4), len) };
+        assert_eq!(data, b"Mozilla/5.0");
+        unsafe { o7f(ptr) };
+
+        // Unknown selector -> zero-length, non-null, freeable.
+        let empty = o7s(9999);
+        assert!(!empty.is_null());
+        unsafe { o7f(empty) };
+        unsafe { o7f(core::ptr::null_mut()) };
     }
 }

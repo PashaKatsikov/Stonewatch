@@ -79,6 +79,9 @@ kotlin {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // WindowCompat / WindowInsetsControllerCompat / WindowInsetsAnimationCompat
+    // for the edge-to-edge window + keyboard-inset bridge in MainActivity.
+    implementation("androidx.core:core-ktx:1.15.0")
 }
 
 flutter {

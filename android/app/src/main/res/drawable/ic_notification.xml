@@ -3,11 +3,12 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Flame silhouette — reads as fire at 24dp, distinct from the
-         launcher icon. White on transparent so the status-bar tint
-         renders it correctly on light and dark trays. -->
+    <!-- Flame (fire) with an inner tongue cut out via evenOdd, so it reads
+         clearly as fire at 24dp and stays distinct from the launcher icon.
+         White on transparent so the status-bar tint renders correctly on
+         both light and dark trays. -->
     <path
         android:fillColor="#FFFFFFFF"
         android:fillType="evenOdd"
-        android:pathData="M13,1.6C9.9,5.2 11.2,7.9 11.2,9.9C11.2,11.2 10.3,11.9 9.3,11.6C9.6,13 8.6,14 7.6,13.6C8.1,17 10.4,22 14.1,22C17.8,22 20.6,19 20.6,15.2C20.6,11.6 18.3,9.8 17.4,6.6C16.9,8.2 16,8.8 15.2,8.4C16.5,6 16,3.8 13,1.6ZM13.9,19.4C12.1,19.4 10.6,18 10.6,16.2C10.6,14.2 12.3,13.6 12.1,11.6C13.3,12.8 13.9,13.4 14.9,13.6C15.9,12.9 16,12 15.8,11.1C16.7,12 17.3,13.2 17.3,14.8C17.3,17.1 15.8,19.4 13.9,19.4Z"/>
+        android:pathData="M13.5,0.67C14.24,3.32 14.24,5.47 14.24,5.47C14.24,7.53 12.89,9.2 10.83,9.2C8.76,9.2 7.2,7.53 7.2,5.47L7.23,5.11C5.21,7.51 4,10.62 4,14C4,18.42 7.58,22 12,22C16.42,22 20,18.42 20,14C20,8.61 17.41,3.8 13.5,0.67ZM11.71,19C9.93,19 8.49,17.6 8.49,15.86C8.49,14.24 9.54,13.1 11.3,12.74C13.07,12.38 14.9,11.53 15.92,10.16C16.31,11.45 16.51,12.81 16.51,14.2C16.51,16.85 14.35,19 11.71,19Z"/>
 </vector>

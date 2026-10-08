@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-const _channel = MethodChannel('stonewatch/shell');
+const _channel = MethodChannel('sw/host');
 
 Future<void> tuneWebView() async {
   try {

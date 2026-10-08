@@ -189,3 +189,15 @@ external int swDiceRoundId(Pointer<Void> handle);
   isLeaf: true,
 )
 external int swDiceOtherThan(Pointer<Void> handle, int art, int count);
+
+// ── gray-part vault ───────────────────────────────────────────────────
+// o7s decodes the masked value for a selector into a freshly allocated
+// buffer laid out as [len: u32 LE][utf8 bytes]; o7f frees it. See
+// lib/gateway/cipher/rust_vault.dart for the string wrapper and the
+// selector table (mirrors vault.rs).
+
+@Native<Pointer<Uint8> Function(Uint32)>(symbol: 'o7s', isLeaf: true)
+external Pointer<Uint8> swVaultTake(int sel);
+
+@Native<Void Function(Pointer<Uint8>)>(symbol: 'o7f', isLeaf: true)
+external void swVaultFree(Pointer<Uint8> ptr);

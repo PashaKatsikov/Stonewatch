@@ -7,5 +7,7 @@ pub mod veil;
 pub mod dice;
 pub mod economy;
 pub mod ffi;
+pub mod mask;
 pub mod motion;
 pub mod rules;
+pub mod vault;
