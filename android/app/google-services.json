@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "834002154720",
+    "project_id": "stonewatch-de20e",
+    "storage_bucket": "stonewatch-de20e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:834002154720:android:9451776cc6e9b0e4bd4c85",
+        "android_client_info": {
+          "package_name": "com.stonewatch.watchgame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXDCTVvXJ0gqQN9xyjN7w9ZtXH5obE2tA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

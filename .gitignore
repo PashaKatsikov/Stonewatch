@@ -39,6 +39,9 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# Local release binaries and obfuscation maps
+/release/
+
 # Rust build output
 /native/*/target/
 
