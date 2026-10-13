@@ -4,8 +4,8 @@ import '../secure/values.dart';
 import '../config/settings.dart';
 import '../store/prefs_store.dart';
 import '../push/messaging.dart';
-import 'backdrop.dart';
 import 'buttons.dart';
+import 'gate_scene.dart';
 import 'web_screen.dart';
 
 // ============================================================
@@ -128,7 +128,7 @@ class _NotifyPromptState extends State<NotifyPrompt> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF10161C),
-      body: Backdrop(
+      body: GateScene(
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: landscape ? size.width * 0.1 : 28,

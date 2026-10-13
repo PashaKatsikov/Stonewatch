@@ -64,19 +64,17 @@ pub fn unmask(cipher: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// Seal plaintext bytes into a masked array. The keystream XOR is
+/// symmetric, so this is the exact inverse of [`unmask`]. Used only by the
+/// offline `seal_vault` example when a new secret (endpoint, AppsFlyer dev
+/// key, Firebase options, ...) has to be re-sealed into `vault.rs`.
+pub fn seal(plain: &[u8]) -> Vec<u8> {
+    unmask(plain)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Mirror the sealer so the round-trip can be asserted in-crate.
-    fn seal(plain: &[u8]) -> Vec<u8> {
-        let ks = keystream();
-        plain
-            .iter()
-            .enumerate()
-            .map(|(i, &b)| b ^ ks[i % SPAN] ^ drift(i))
-            .collect()
-    }
 
     #[test]
     fn round_trips() {

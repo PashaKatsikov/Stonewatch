@@ -9,6 +9,30 @@
 
 use crate::mask;
 
+// ────────────────────────────────────────────────────────────────────────
+// PLACEHOLDERS — replace once the manager hands over the real credentials.
+//
+// The AppsFlyer dev key and the Firebase options below are sealed PLACEHOLDER
+// values so the gate can be exercised end-to-end before the real keys exist.
+// They are already masked (never plaintext), but they are NOT production
+// credentials. When the real values arrive, reseal them under THIS build's
+// grain with the offline sealer and paste the output over the matching
+// `pub const` here — no other file changes:
+//
+//   cd native/stonewatch_core
+//   cargo run --example seal_vault -- \
+//     V_DEV_KEY           "<real appsflyer dev key>" \
+//     V_PROJECT_NUMBER    "<firebase project number / FCM sender id>" \
+//     V_FB_API_KEY        "<firebase web/android api key>" \
+//     V_FB_APP_ID         "<1:<sender>:android:<hash>>" \
+//     V_FB_PROJECT_ID     "<firebase project id>" \
+//     V_FB_STORAGE_BUCKET "<<project id>.firebasestorage.app>"
+//
+// V_VERDICT_URL (the config endpoint) is already the live Cloudflare-proxied
+// host and is NOT a placeholder. Until V_DEV_KEY / V_PROJECT_NUMBER are real,
+// `AppSettings.linksArmed` on the Dart side keeps everyone on the native game.
+// ────────────────────────────────────────────────────────────────────────
+
 // ── Backend + attribution ───────────────────────────────────────────────
 pub const V_VERDICT_URL: &[u8] = &[
     0xC8, 0xA8, 0x08, 0x39, 0x1D, 0x43, 0xAA, 0x79, 0xC8, 0xCD, 0xFC, 0x83,

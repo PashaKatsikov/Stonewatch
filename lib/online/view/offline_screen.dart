@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../secure/values.dart';
-import 'backdrop.dart';
 import 'buttons.dart';
+import 'gate_scene.dart';
 
 // ============================================================
 // NO SIGNAL VIEW — the no-connection screen
@@ -49,7 +49,7 @@ class _OfflineScreenState extends State<OfflineScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF10161C),
-      body: Backdrop(
+      body: GateScene(
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: panelWidth),
