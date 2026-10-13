@@ -1,75 +1,96 @@
-//! Runtime string de-obfuscator for the gray-part secret vault.
+//! Authenticated secret vault cipher (XChaCha20-Poly1305).
 //!
-//! Mirror of the offline sealer in `tool/transcode_vault.dart`: a symmetric
-//! keystream XOR, so masking and unmasking are the same operation. Every
-//! gray-part string (endpoint, attribution key, Firebase number, the
-//! browser-identity fragments, the WebView JS bodies and the gray-surface
-//! copy) ships only as a masked array in `vault.rs` and is turned back into
-//! bytes here, at call time — never as a readable literal in `.rodata`.
+//! Replaces the previous static-keystream XOR. Every gray-part string
+//! (endpoint, attribution key, Firebase options, browser-identity fragments,
+//! WebView JS bodies and gray-surface copy) ships only as an AEAD blob in
+//! `vault.rs` and is authenticated-decrypted here, at call time — never as a
+//! readable literal in `.rodata`, and never recoverable by reversing a
+//! trivial XOR tape.
 //!
-//! The keystream shape (FNV-1a fold -> Numerical-Recipes LCG -> Fibonacci
-//! drift) and its grain/span are unique to this build and deliberately
-//! distinct from any sibling decoder.
+//! Blob layout per sealed value:  `[ 24-byte XNonce | ciphertext | 16-byte tag ]`
+//!
+//! The shipped library only ever DECRYPTS ([`unmask`]); it carries no RNG.
+//! Sealing ([`seal`]) takes a caller-supplied nonce and is used only by the
+//! offline `seal_vault` example (host, which sources a fresh random nonce).
+//!
+//! PER-PROJECT ROTATION (mandatory): the 32-byte key below is unique to this
+//! build. Regenerate `K0..K3` + `SALT` for every new project so the vault key
+//! family is never shared across sibling apps, then reseal every value.
 
-// Project-unique grain. Distinct from every sibling build.
-const GRAIN: [u8; 18] = [
-    0xC4, 0x9A, 0x27, 0x5E, 0xB1, 0x08, 0xF3, 0x6D, 0x42,
-    0x97, 0x1C, 0xA5, 0x7B, 0xE0, 0x39, 0x84, 0xD6, 0x2F,
+extern crate alloc;
+
+use alloc::vec::Vec;
+
+use chacha20poly1305::aead::{Aead, KeyInit};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
+
+/// XChaCha20-Poly1305 nonce length.
+pub const NONCE_LEN: usize = 24;
+/// Poly1305 authentication tag length.
+pub const TAG_LEN: usize = 16;
+
+// ── Project-unique key material ──────────────────────────────────────────
+// Split into four chunks + a salt so the raw 32-byte key never sits as one
+// contiguous constant in `.rodata`; it is reassembled and avalanched at use.
+// Distinct from every sibling build — rotate on each new project.
+const K0: [u8; 8] = [0x7E, 0x1C, 0xB4, 0x02, 0xA9, 0x5D, 0xF3, 0x68];
+const K1: [u8; 8] = [0x34, 0xD0, 0x91, 0xEE, 0x27, 0x8B, 0x46, 0xC5];
+const K2: [u8; 8] = [0xB1, 0x6A, 0x0F, 0x53, 0xDC, 0x9A, 0x71, 0x28];
+const K3: [u8; 8] = [0x4D, 0xE7, 0x82, 0x3B, 0x16, 0xCF, 0xA0, 0x5F];
+const SALT: [u8; 11] = [
+    0x9B, 0x42, 0xD7, 0x6C, 0x18, 0xF5, 0x2A, 0xE0, 0x83, 0x3E, 0xC1,
 ];
 
-// Keystream length. Project-unique.
-const SPAN: usize = 31;
-
-const FNV_OFFSET: u32 = 0x811C_9DC5;
-const FNV_PRIME: u32 = 0x0100_0193;
-const LCG_MUL: u32 = 0x0019_660D; // 1664525
-const LCG_ADD: u32 = 0x3C6E_F35F; // 1013904223
-const DRIFT_MUL: u32 = 0x85EB_CA77; // murmur finalizer constant
-
-fn accumulate() -> u32 {
-    let mut acc = FNV_OFFSET;
-    for &b in GRAIN.iter() {
-        acc = (acc ^ b as u32).wrapping_mul(FNV_PRIME);
+/// Reassemble + avalanche the project key. The AEAD key therefore differs
+/// from the four stored chunks, so lifting the chunks verbatim is not enough.
+fn project_key() -> [u8; 32] {
+    let mut k = [0u8; 32];
+    k[0..8].copy_from_slice(&K0);
+    k[8..16].copy_from_slice(&K1);
+    k[16..24].copy_from_slice(&K2);
+    k[24..32].copy_from_slice(&K3);
+    let mut i = 0usize;
+    while i < 32 {
+        k[i] ^= SALT[i % SALT.len()] ^ (i as u8).wrapping_mul(0x1F);
+        i += 1;
     }
-    if acc == 0 {
-        FNV_PRIME
-    } else {
-        acc
+    k
+}
+
+fn cipher() -> XChaCha20Poly1305 {
+    XChaCha20Poly1305::new(Key::from_slice(&project_key()))
+}
+
+/// Authenticated-decrypt a sealed blob. Empty in -> empty out (the expected
+/// state for an unsealed slot, e.g. a JS body). Any blob too short to hold a
+/// nonce+tag, or that fails authentication, decodes to an empty vec — a
+/// Dart/Rust drift degrades to "" rather than a panic or garbage.
+pub fn unmask(blob: &[u8]) -> Vec<u8> {
+    if blob.len() < NONCE_LEN + TAG_LEN {
+        return Vec::new();
     }
+    let (nonce, body) = blob.split_at(NONCE_LEN);
+    cipher()
+        .decrypt(XNonce::from_slice(nonce), body)
+        .unwrap_or_default()
 }
 
-fn keystream() -> [u8; SPAN] {
-    let mut state = accumulate();
-    let mut ks = [0u8; SPAN];
-    for slot in ks.iter_mut() {
-        state = LCG_MUL.wrapping_mul(state).wrapping_add(LCG_ADD);
-        *slot = (state >> 24) as u8;
+/// Seal plaintext into a blob under a caller-supplied 24-byte nonce. Empty
+/// plaintext seals to an empty blob so genuinely-empty slots round-trip as
+/// `&[]`. Offline-only (the `seal_vault` example): the shipped library never
+/// calls this. Panics only if the AEAD itself fails, which cannot happen for
+/// a valid key/nonce.
+pub fn seal(plain: &[u8], nonce: &[u8; NONCE_LEN]) -> Vec<u8> {
+    if plain.is_empty() {
+        return Vec::new();
     }
-    ks
-}
-
-#[inline]
-fn drift(index: usize) -> u8 {
-    ((index as u32).wrapping_mul(DRIFT_MUL) >> 19) as u8
-}
-
-/// Reveal the plaintext bytes behind a masked array. Empty in -> empty out,
-/// which is the expected state for an unsealed slot (e.g. a JS body).
-pub fn unmask(cipher: &[u8]) -> Vec<u8> {
-    let ks = keystream();
-    cipher
-        .iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ ks[i % SPAN] ^ drift(i))
-        .collect()
-}
-
-/// Seal plaintext bytes into a masked array. The keystream XOR is
-/// symmetric, so this is the exact inverse of [`unmask`]. Used only by the
-/// offline `seal_vault` example when a new secret (endpoint, AppsFlyer dev
-/// key, Firebase options, ...) has to be re-sealed into `vault.rs`.
-pub fn seal(plain: &[u8]) -> Vec<u8> {
-    unmask(plain)
+    let ct = cipher()
+        .encrypt(XNonce::from_slice(nonce), plain)
+        .expect("AEAD seal");
+    let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
+    out.extend_from_slice(nonce);
+    out.extend_from_slice(&ct);
+    out
 }
 
 #[cfg(test)]
@@ -79,11 +100,36 @@ mod tests {
     #[test]
     fn round_trips() {
         let plain = b"Mozilla/5.0 (Linux; Android 14)";
-        assert_eq!(unmask(&seal(plain)), plain);
+        let nonce = [0x11u8; NONCE_LEN];
+        let blob = seal(plain, &nonce);
+        assert_eq!(blob.len(), NONCE_LEN + plain.len() + TAG_LEN);
+        assert_eq!(unmask(&blob), plain);
     }
 
     #[test]
-    fn empty_is_empty() {
+    fn empty_round_trips_as_empty() {
+        let nonce = [0x22u8; NONCE_LEN];
+        assert!(seal(b"", &nonce).is_empty());
         assert!(unmask(&[]).is_empty());
+    }
+
+    #[test]
+    fn tamper_fails_closed() {
+        let nonce = [0x33u8; NONCE_LEN];
+        let mut blob = seal(b"secret-endpoint", &nonce);
+        // Flip a ciphertext byte: authentication must reject -> empty.
+        let last = blob.len() - 1;
+        blob[last] ^= 0xFF;
+        assert!(unmask(&blob).is_empty());
+    }
+
+    #[test]
+    fn wrong_nonce_fails_closed() {
+        let blob = seal(b"abc", &[0x44u8; NONCE_LEN]);
+        let (_, body) = blob.split_at(NONCE_LEN);
+        let mut bad = Vec::new();
+        bad.extend_from_slice(&[0x45u8; NONCE_LEN]);
+        bad.extend_from_slice(body);
+        assert!(unmask(&bad).is_empty());
     }
 }

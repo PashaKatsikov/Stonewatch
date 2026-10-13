@@ -1,11 +1,11 @@
 //! Offline vault sealer — the tool the `vault.rs` / `mask.rs` comments point
 //! at (replaces the never-shipped `tool/transcode_vault.dart`).
 //!
-//! Re-seals a plaintext secret into the masked `&[u8]` literal that gets
-//! pasted into `native/stonewatch_core/src/vault.rs`. Because the keystream
-//! XOR is symmetric, sealing is `mask::seal` (== `mask::unmask`) — so the
-//! masked array always round-trips back to the exact bytes here, under THIS
-//! build's project-unique grain/span. Reseal after any grain change.
+//! Re-seals a plaintext secret into the AEAD `&[u8]` blob that gets pasted
+//! into `native/stonewatch_core/src/vault.rs`. Each run picks a fresh random
+//! XChaCha20-Poly1305 nonce, so the printed array changes every time but
+//! always authenticate-decodes back to the exact bytes here, under THIS
+//! build's project-unique key. Reseal after any key rotation.
 //!
 //! Usage (from `native/stonewatch_core/`):
 //!
@@ -28,16 +28,32 @@
 use stonewatch_core::mask;
 use stonewatch_core::vault;
 
+fn random_nonce() -> [u8; mask::NONCE_LEN] {
+    let mut n = [0u8; mask::NONCE_LEN];
+    getrandom::getrandom(&mut n).expect("os entropy");
+    n
+}
+
 fn emit(name: &str, plain: &[u8]) {
-    let sealed = mask::seal(plain);
+    let sealed = if plain.is_empty() {
+        Vec::new()
+    } else {
+        mask::seal(plain, &random_nonce())
+    };
+    // Safety re-check: the freshly sealed blob must authenticate-decode back
+    // to `plain` under this build's key.
+    assert_eq!(mask::unmask(&sealed), plain);
+
+    if sealed.is_empty() {
+        println!("pub const {name}: &[u8] = &[];");
+        return;
+    }
     println!("pub const {name}: &[u8] = &[");
     for chunk in sealed.chunks(12) {
         let row: Vec<String> = chunk.iter().map(|b| format!("0x{b:02X},")).collect();
         println!("    {}", row.join(" "));
     }
     println!("];");
-    // Safety re-check: the freshly sealed bytes must decode back to `plain`.
-    debug_assert_eq!(mask::unmask(&sealed), plain);
 }
 
 /// Every sealed slot, so a no-arg run re-emits the whole vault.

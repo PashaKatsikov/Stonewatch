@@ -8,6 +8,14 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# Pure-Rust AEAD for the secret vault. `default-features = false` drops the
+# runtime RNG (the shipped library only ever DECRYPTS); `alloc` gives the
+# Vec-returning encrypt/decrypt. Cross-compiles cleanly to every Android ABI.
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+# Host-only entropy for the offline sealer examples (fresh nonce per value).
+getrandom = "0.2"
 
 [profile.release]
 opt-level = 3
