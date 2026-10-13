@@ -41,6 +41,7 @@ const int _kJsViewport = 30;
 const int _kJsKeyboard = 31;
 const int _kJsAutoplay = 32;
 const int _kJsSeatHook = 33;
+const int _kJsLinks = 34;
 
 const int _kNotifyTitle = 40;
 const int _kNotifySubtitle = 41;
@@ -114,6 +115,10 @@ String revealWebkitBuild() => _reveal(_kWebkitBuild);
 String revealJsViewport() => _reveal(_kJsViewport);
 String revealJsKeyboard() => _reveal(_kJsKeyboard);
 String revealJsAutoplay() => _reveal(_kJsAutoplay);
+
+/// Same-frame link/popup normalizer (target="_blank" + window.open), run on
+/// every page so the single-window shell opens links the delegate can route.
+String revealJsLinks() => _reveal(_kJsLinks);
 
 /// Name of the JS global that [revealJsKeyboard] installs; the host calls
 /// it with the native-measured keyboard height to lift the focused field.

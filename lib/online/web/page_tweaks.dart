@@ -49,5 +49,6 @@ abstract final class PageTweaks {
         revealJsViewport(),
         revealJsKeyboard(),
         revealJsAutoplay(),
+        revealJsLinks(),
       ];
 }
